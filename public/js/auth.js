@@ -5,7 +5,7 @@
 // ============================================================
 import { supabase } from "./supabase.js";
 import { state, $ } from "./state.js";
-import { showLogin, showApp, setAuthError, renderResumen, mostrarErrorApp } from "./ui.js";
+import { showLogin, showApp, setAuthError, renderDashboard, mostrarErrorApp } from "./ui.js";
 import { cargarDatosIniciales } from "./data.js";
 
 export async function initAuth() {
@@ -32,7 +32,7 @@ function applySession(session) {
   if (state.user) {
     showApp();
     cargarDatosIniciales()
-      .then(renderResumen)
+      .then(renderDashboard)
       .catch((err) => {
         console.error(err);
         mostrarErrorApp("No pude cargar tus datos: " + err.message);

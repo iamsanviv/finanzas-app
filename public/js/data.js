@@ -52,6 +52,66 @@ const CUENTAS_BASE = [
 export async function cargarDatosIniciales() {
   await sembrarSiHaceFalta();
   await Promise.all([cargarCategorias(), cargarCuentas()]);
+  await cargarMes();
+}
+
+// ---------- datos del mes visible (state.period) ----------
+export async function cargarMes() {
+  await Promise.all([cargarTransacciones(), cargarPlan()]);
+}
+
+function rangoDelPeriodo(period) {
+  const [y, m] = period.split("-").map(Number);
+  const ultimoDia = new Date(y, m, 0).getDate();
+  return {
+    desde: `${period}-01`,
+    hasta: `${period}-${String(ultimoDia).padStart(2, "0")}`,
+  };
+}
+
+async function cargarTransacciones() {
+  const { desde, hasta } = rangoDelPeriodo(state.period);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .gte("date", desde)
+    .lte("date", hasta)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Cargando transacciones: ${error.message}`);
+  state.transactions = data;
+}
+
+async function cargarPlan() {
+  const { data, error } = await supabase
+    .from("monthly_plans")
+    .select("*")
+    .eq("period", state.period)
+    .maybeSingle();
+  if (error) throw new Error(`Cargando plan: ${error.message}`);
+  state.plan = data;
+}
+
+export async function guardarPlan(baseIncome) {
+  const fila = { user_id: state.user.id, period: state.period, base_income: baseIncome };
+  const { error } = await supabase
+    .from("monthly_plans")
+    .upsert(fila, { onConflict: "user_id,period" });
+  if (error) throw new Error(`Guardando plan: ${error.message}`);
+  await cargarPlan();
+}
+
+export async function crearTransaccion(tx) {
+  const fila = { ...tx, user_id: state.user.id };
+  const { error } = await supabase.from("transactions").insert(fila);
+  if (error) throw new Error(`Guardando movimiento: ${error.message}`);
+  await cargarMes();
+}
+
+export async function borrarTransaccion(id) {
+  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  if (error) throw new Error(`Borrando movimiento: ${error.message}`);
+  await cargarMes();
 }
 
 async function sembrarSiHaceFalta() {
