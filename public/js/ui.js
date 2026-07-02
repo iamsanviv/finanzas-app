@@ -7,7 +7,7 @@ import {
   state, $, fmtCOP, esc, parseMonto, todayISO, fmtFecha,
   periodoBonito, moverPeriodo, resumenMes, nombreCategoria, nombreCuenta,
 } from "./state.js";
-import { cargarMes, crearTransaccion, borrarTransaccion, guardarPlan } from "./data.js";
+import { cargarMes, crearTransaccion, borrarTransaccion, guardarPlan, borrarPlan } from "./data.js";
 
 // ---------- vistas base ----------
 export function showLogin() {
@@ -58,6 +58,7 @@ function tarjetaPlan(r) {
   const hint = r.base > 0
     ? `Disponible para gastos (${r.gastos70.pct}%): <b>${fmtCOP(r.gastos70.objetivo)}</b>`
     : `Define tu comisión del mes para activar la regla 10/10/10/70.`;
+  const puedeDeshacer = r.base > 0;
   return `
   <div class="card">
     <h2>Plan del mes</h2>
@@ -67,6 +68,7 @@ function tarjetaPlan(r) {
         <input id="plan-base" inputmode="numeric" placeholder="2.442.000" value="${valor}">
       </label>
       <button class="btn btn-primary btn-plan" type="submit">Guardar</button>
+      <button class="btn btn-ghost btn-plan" type="button" data-action="plan-reset" ${puedeDeshacer ? "" : "disabled"}>Deshacer</button>
     </form>
     <p class="hint">${hint}</p>
   </div>`;
@@ -195,6 +197,11 @@ document.addEventListener("click", async (e) => {
     if (btn.dataset.action === "tx-del") {
       if (!confirm("¿Borrar este movimiento?")) return;
       await borrarTransaccion(btn.dataset.id);
+      renderDashboard();
+    }
+    if (btn.dataset.action === "plan-reset") {
+      if (!confirm("¿Borrar la comisión base de este mes?")) return;
+      await borrarPlan();
       renderDashboard();
     }
   } catch (err) {

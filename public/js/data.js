@@ -101,6 +101,16 @@ export async function guardarPlan(baseIncome) {
   await cargarPlan();
 }
 
+export async function borrarPlan() {
+  const { error } = await supabase
+    .from("monthly_plans")
+    .delete()
+    .eq("user_id", state.user.id)
+    .eq("period", state.period);
+  if (error) throw new Error(`Borrando plan: ${error.message}`);
+  await cargarPlan();
+}
+
 export async function crearTransaccion(tx) {
   const fila = { ...tx, user_id: state.user.id };
   const { error } = await supabase.from("transactions").insert(fila);
