@@ -5,7 +5,8 @@
 // ============================================================
 import { supabase } from "./supabase.js";
 import { state, $ } from "./state.js";
-import { showLogin, showApp, setAuthError } from "./ui.js";
+import { showLogin, showApp, setAuthError, renderResumen, mostrarErrorApp } from "./ui.js";
+import { cargarDatosIniciales } from "./data.js";
 
 export async function initAuth() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -28,8 +29,17 @@ export async function initAuth() {
 function applySession(session) {
   state.session = session;
   state.user = session?.user ?? null;
-  if (state.user) showApp();
-  else showLogin();
+  if (state.user) {
+    showApp();
+    cargarDatosIniciales()
+      .then(renderResumen)
+      .catch((err) => {
+        console.error(err);
+        mostrarErrorApp("No pude cargar tus datos: " + err.message);
+      });
+  } else {
+    showLogin();
+  }
 }
 
 async function onLoginSubmit(e) {

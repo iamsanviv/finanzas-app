@@ -156,3 +156,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold)}
   padding:60px 0;
   font-size:.9rem;
 }
+
+/* ---------- resumen y tarjetas ---------- */
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+.kpi-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi-value{font-family:var(--font-display);font-size:1.3rem;font-weight:700;margin-top:2px}
+.cards{display:grid;gap:10px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.card h2{font-family:var(--font-display);font-size:.95rem;margin-bottom:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.row:last-child{border-bottom:none}
+.chip{font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 8px;text-transform:uppercase;letter-spacing:.04em}
