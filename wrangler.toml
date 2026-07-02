@@ -1,0 +1,6 @@
+# finanzas-app · Cloudflare Workers (sitio estático)
+name = "finanzas-app"
+compatibility_date = "2026-07-01"
+
+[assets]
+directory = "./public"
