@@ -101,16 +101,6 @@ export async function guardarPlan(baseIncome) {
   await cargarPlan();
 }
 
-export async function borrarPlan() {
-  const { error } = await supabase
-    .from("monthly_plans")
-    .delete()
-    .eq("user_id", state.user.id)
-    .eq("period", state.period);
-  if (error) throw new Error(`Borrando plan: ${error.message}`);
-  await cargarPlan();
-}
-
 export async function crearTransaccion(tx) {
   const fila = { ...tx, user_id: state.user.id };
   const { error } = await supabase.from("transactions").insert(fila);
@@ -122,6 +112,51 @@ export async function borrarTransaccion(id) {
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw new Error(`Borrando movimiento: ${error.message}`);
   await cargarMes();
+}
+
+export async function actualizarTransaccion(id, cambios) {
+  const { error } = await supabase.from("transactions").update(cambios).eq("id", id);
+  if (error) throw new Error(`Editando movimiento: ${error.message}`);
+  await cargarMes();
+}
+
+// ---------- categorías (CRUD) ----------
+export async function crearCategoria(name, kind) {
+  const sort = state.categories.length;
+  const fila = { user_id: state.user.id, name, kind, sort };
+  const { error } = await supabase.from("categories").insert(fila);
+  if (error) {
+    if (/duplicate key/i.test(error.message))
+      throw new Error(`Ya tienes una categoría "${name}" de ${kind}.`);
+    throw new Error(`Creando categoría: ${error.message}`);
+  }
+  await cargarCategorias();
+}
+
+export async function renombrarCategoria(id, name) {
+  const { error } = await supabase.from("categories").update({ name }).eq("id", id);
+  if (error) {
+    if (/duplicate key/i.test(error.message))
+      throw new Error(`Ya existe otra categoría con ese nombre.`);
+    throw new Error(`Renombrando categoría: ${error.message}`);
+  }
+  await cargarCategorias();
+}
+
+export async function borrarCategoria(id) {
+  const { error } = await supabase.from("categories").delete().eq("id", id);
+  if (error) throw new Error(`Borrando categoría: ${error.message}`);
+  await Promise.all([cargarCategorias(), cargarMes()]);
+}
+
+async function cargarCategorias() {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .order("kind", { ascending: true })
+    .order("sort", { ascending: true });
+  if (error) throw new Error(`Cargando categorías: ${error.message}`);
+  state.categories = data;
 }
 
 async function sembrarSiHaceFalta() {
@@ -151,15 +186,6 @@ async function contar(tabla) {
 async function insertar(tabla, filas) {
   const { error } = await supabase.from(tabla).insert(filas);
   if (error) throw new Error(`Sembrando ${tabla}: ${error.message}`);
-}
-
-async function cargarCategorias() {
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .order("sort", { ascending: true });
-  if (error) throw new Error(`Cargando categorías: ${error.message}`);
-  state.categories = data;
 }
 
 async function cargarCuentas() {
