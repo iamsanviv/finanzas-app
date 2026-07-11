@@ -57,7 +57,38 @@ export async function cargarDatosIniciales() {
 
 // ---------- datos del mes visible (state.period) ----------
 export async function cargarMes() {
-  await Promise.all([cargarTransacciones(), cargarPlan()]);
+  await Promise.all([cargarTransacciones(), cargarPlan(), cargarTarjetas()]);
+}
+
+// ---------- tarjetas de crédito (deuda HISTÓRICA, no solo el mes) ----------
+// La deuda de una TC es toda su historia:
+//   deuda = Σ gastos con esa cuenta − Σ pago_tc − Σ ingresos con esa cuenta
+// (un ingreso en la TC = reembolso/cashback → resta deuda).
+async function cargarTarjetas() {
+  const tarjetas = state.accounts.filter((a) => a.type === "credito");
+  if (tarjetas.length === 0) {
+    state.cards = [];
+    return;
+  }
+
+  const ids = tarjetas.map((a) => a.id);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount,kind,account_id")
+    .in("account_id", ids);
+  if (error) throw new Error(`Cargando tarjetas: ${error.message}`);
+
+  state.cards = tarjetas.map((cuenta) => {
+    const movs = data.filter((t) => t.account_id === cuenta.id);
+    const suma = (kind) =>
+      movs.filter((t) => t.kind === kind).reduce((acc, t) => acc + Number(t.amount), 0);
+
+    const deuda = suma("gasto") - suma("pago_tc") - suma("ingreso");
+    const cupo = Number(cuenta.credit_limit ?? 0);
+    const utilizacion = cupo > 0 ? (deuda / cupo) * 100 : 0;
+
+    return { cuenta, deuda, cupo, utilizacion };
+  });
 }
 
 function rangoDelPeriodo(period) {

@@ -6,7 +6,7 @@
 // que un re-render del dashboard no los borre.
 // ============================================================
 import {
-  state, $, fmtCOP, esc, parseMonto, todayISO, fmtFecha,
+  state, $, fmtCOP, esc, parseMonto, todayISO, fmtFecha, diasHastaDia,
   periodoBonito, moverPeriodo, resumenMes, nombreCategoria, nombreCuenta,
 } from "./state.js";
 import {
@@ -69,6 +69,7 @@ export function renderDashboard() {
     tarjetaPlan(r),
     tarjetaKpis(r),
     tarjetaRegla(r),
+    tarjetasTC(),
     tarjetaNuevoMovimiento(),
     tarjetaMovimientos(),
   ].join("");
@@ -193,6 +194,19 @@ function tarjetaMovimientos() {
   }
   const filas = state.transactions
     .map((t) => {
+      if (t.kind === "pago_tc") {
+        const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
+        return `
+        <div class="tx-row">
+          <div class="tx-info">
+            <span class="tx-cat">Pago ${esc(nombreCuenta(t.account_id))} · abono a deuda</span>
+            <span class="tx-meta">${fmtFecha(t.date)}</span>
+            ${nota}
+          </div>
+          <span class="tx-monto">↓${fmtCOP(t.amount)}</span>
+          <button class="icon-btn" data-action="tx-del" data-id="${t.id}" type="button" aria-label="Borrar">✕</button>
+        </div>`;
+      }
       const signo = t.kind === "ingreso" ? "+" : "−";
       const claseMonto = t.kind === "ingreso" ? "ok-text" : "bad-text";
       const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
@@ -268,6 +282,76 @@ function abrirCategorias() {
     ${bloque("ingreso", "Ingresos")}`);
 }
 
+// ---------- tarjetas de crédito ----------
+// Frase amable para los días que faltan hasta el corte/pago.
+function textoDias(n) {
+  if (n == null) return "";
+  if (n === 0) return "hoy";
+  return `en ${n} ${n === 1 ? "día" : "días"}`;
+}
+
+function tarjetasTC() {
+  if (state.cards.length === 0) return "";
+  return state.cards
+    .map((c) => {
+      const util = c.utilizacion;
+      const ancho = Math.max(0, Math.min(util, 100)); // barra clamp 0–100
+      // Verde ≤30 (zona sana Datacrédito) · dorado ≤70 · rojo >70
+      let clase = "fill-ok";
+      if (util > 70) clase = "fill-bad";
+      else if (util > 30) clase = "fill-gold";
+
+      const alerta = util > 30
+        ? `<p class="tc-alerta">⚠ Uso sobre 30%: puede afectar tu Datacrédito.</p>`
+        : "";
+
+      const corte = c.cuenta.cut_day
+        ? `Corte: día ${c.cuenta.cut_day} (${textoDias(diasHastaDia(c.cuenta.cut_day))})`
+        : "";
+      const pago = c.cuenta.due_day
+        ? `Pago hasta: día ${c.cuenta.due_day} (${textoDias(diasHastaDia(c.cuenta.due_day))})`
+        : "";
+      const fechas = [corte, pago].filter(Boolean).join(" · ");
+
+      return `
+      <div class="card">
+        <div class="card-head">
+          <h2>${esc(c.cuenta.name)}</h2>
+          <button class="btn btn-ghost btn-mini" data-action="pago-open" data-id="${c.cuenta.id}" type="button">Registrar pago</button>
+        </div>
+        <div class="tc-deuda">${fmtCOP(c.deuda)}</div>
+        <div class="tc-sub">de ${fmtCOP(c.cupo)} de cupo · ${Math.round(util)}% usado</div>
+        <div class="bar tc-bar">
+          <div class="bar-fill ${clase}" style="width:${ancho}%"></div>
+          <div class="tc-marca"></div>
+        </div>
+        ${alerta}
+        ${fechas ? `<p class="tc-fechas">${fechas}</p>` : ""}
+      </div>`;
+    })
+    .join("");
+}
+
+// ---------- modal: registrar pago de TC ----------
+function abrirPagoTC(id) {
+  const cuenta = state.accounts.find((a) => a.id === id);
+  if (!cuenta) return;
+  abrirModal(`
+    <h2>Registrar pago · ${esc(cuenta.name)}</h2>
+    <p class="hint">El pago abona a la deuda de la tarjeta. <b>No cuenta como gasto</b> del mes: el gasto ya se registró cuando consumiste.</p>
+    <form id="form-pago" data-id="${cuenta.id}">
+      <label class="field"><span class="field-label">Monto (COP)</span>
+        <input id="pago-monto" inputmode="numeric" placeholder="180.000" required></label>
+      <div class="grid2">
+        <label class="field"><span class="field-label">Fecha</span>
+          <input id="pago-fecha" type="date" value="${todayISO()}"></label>
+        <label class="field"><span class="field-label">Nota</span>
+          <input id="pago-nota" placeholder="opcional" maxlength="120"></label>
+      </div>
+      <button class="btn btn-primary" type="submit">Registrar pago</button>
+    </form>`);
+}
+
 // ---------- eventos (delegación única) ----------
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-action]");
@@ -285,6 +369,8 @@ document.addEventListener("click", async (e) => {
       renderDashboard();
     } else if (act === "tx-edit") {
       abrirEditarTx(btn.dataset.id);
+    } else if (act === "pago-open") {
+      abrirPagoTC(btn.dataset.id);
     } else if (act === "cats-open") {
       abrirCategorias();
     } else if (act === "cat-rename") {
@@ -340,6 +426,19 @@ document.addEventListener("submit", async (e) => {
         category_id: $("#etx-cat").value,
         account_id: $("#etx-cta").value,
         note: $("#etx-nota").value.trim() || null,
+      });
+      cerrarModal();
+      renderDashboard();
+    } else if (e.target.id === "form-pago") {
+      const monto = parseMonto($("#pago-monto").value);
+      if (monto <= 0) { alert("Escribe un monto válido."); return; }
+      await crearTransaccion({
+        date: $("#pago-fecha").value || todayISO(),
+        kind: "pago_tc",
+        amount: monto,
+        category_id: null,
+        account_id: e.target.dataset.id,
+        note: $("#pago-nota").value.trim() || null,
       });
       cerrarModal();
       renderDashboard();

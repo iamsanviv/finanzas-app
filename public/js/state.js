@@ -12,6 +12,7 @@ export const state = {
   categories: [],
   transactions: [],        // solo las del period visible
   plan: null,              // monthly_plan del period visible
+  cards: [],               // tarjetas de crédito con su deuda calculada (histórica)
   budgets: [],
   loans: [],
   goals: [],
@@ -46,6 +47,29 @@ export function moverPeriodo(p, delta) {
 export function fmtFecha(iso) {
   const [, m, d] = iso.split("-");
   return `${d}/${m}`;
+}
+
+// Días hasta la próxima ocurrencia de un día del mes (ej. día de corte/pago).
+// 0 = es hoy. Si el día ya pasó este mes, cuenta hasta el mes siguiente.
+// Ajusta a meses cortos: si el día no existe (ej. 31 en febrero) usa el último
+// día real de ese mes.
+export function diasHastaDia(dia, hoy = new Date()) {
+  if (!dia) return null;
+  const y = hoy.getFullYear();
+  const m = hoy.getMonth(); // 0-11
+  const d = hoy.getDate();
+
+  const diaReal = (año, mes) => Math.min(dia, new Date(año, mes + 1, 0).getDate());
+
+  let objetivo;
+  if (d <= diaReal(y, m)) {
+    objetivo = new Date(y, m, diaReal(y, m));
+  } else {
+    objetivo = new Date(y, m + 1, diaReal(y, m + 1));
+  }
+  const msPorDia = 86400000;
+  const inicioHoy = new Date(y, m, d);
+  return Math.round((objetivo - inicioHoy) / msPorDia);
 }
 
 // ---------- dinero ----------
