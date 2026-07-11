@@ -1,0 +1,18 @@
+# Wrangler / Cloudflare (caché local y builds temporales)
+.wrangler/
+
+# Dependencias
+node_modules/
+
+# Logs
+npm-debug.log*
+*.log
+
+# Variables de entorno locales (no versionar secretos)
+.dev.vars
+.env
+.env.*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
