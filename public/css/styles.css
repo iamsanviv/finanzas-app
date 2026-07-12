@@ -214,10 +214,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold)}
 .del-btn:active{background:var(--surface2);color:var(--bad)}
 
 /* ---------- tarjeta de crédito ---------- */
-.tc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
-.tc-fechas{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-.bar-tc{position:relative}
-.bar-marca{position:absolute;top:-2px;bottom:-2px;left:30%;width:2px;background:var(--text);opacity:.55;border-radius:2px}
+.tc-deuda{font-family:var(--font-display);font-weight:700;font-size:1.9rem;letter-spacing:-.02em;line-height:1.1}
+.tc-sub{color:var(--muted);font-size:.8rem;margin-top:2px;margin-bottom:12px}
+/* La barra de la TC deja ver la marca del 30%, que se sale un poco por
+   arriba y por abajo, así que aquí NO recortamos (overflow visible). */
+.tc-bar{position:relative;overflow:visible}
+.tc-marca{position:absolute;top:-2px;bottom:-2px;left:30%;width:2px;background:var(--text);opacity:.55;border-radius:2px}
+.tc-alerta{color:var(--gold);font-size:.76rem;font-weight:600;margin-top:10px}
+.tc-fechas{color:var(--muted);font-size:.76rem;margin-top:10px}
 
 /* ---------- cabecera de tarjeta + botones mini ---------- */
 .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
