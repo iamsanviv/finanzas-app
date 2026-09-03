@@ -185,6 +185,7 @@ function tarjetaNuevoMovimiento() {
       </div>
       <button id="tx-guardar" class="btn btn-primary" type="submit">Guardar movimiento</button>
     </form>
+    <p class="hint">¿Compraste con la tarjeta de crédito? Regístralo aquí como <b>Gasto</b> eligiendo la tarjeta como cuenta: eso sí aumenta la deuda. El botón "Registrar pago" de la tarjeta es solo para cuando abonas al extracto.</p>
   </div>`;
 }
 
@@ -294,14 +295,15 @@ function tarjetasTC() {
   if (state.cards.length === 0) return "";
   return state.cards
     .map((c) => {
+      const sinDeuda = c.deuda <= 0;
       const util = c.utilizacion;
       const ancho = Math.max(0, Math.min(util, 100)); // barra clamp 0–100
       // Verde ≤30 (zona sana Datacrédito) · dorado ≤70 · rojo >70
       let clase = "fill-ok";
-      if (util > 70) clase = "fill-bad";
-      else if (util > 30) clase = "fill-gold";
+      if (!sinDeuda && util > 70) clase = "fill-bad";
+      else if (!sinDeuda && util > 30) clase = "fill-gold";
 
-      const alerta = util > 30
+      const alerta = !sinDeuda && util > 30
         ? `<p class="tc-alerta">⚠ Uso sobre 30%: puede afectar tu Datacrédito.</p>`
         : "";
 
@@ -313,18 +315,28 @@ function tarjetasTC() {
         : "";
       const fechas = [corte, pago].filter(Boolean).join(" · ");
 
+      // Si pagaste de más, el "deuda" queda negativo: eso es saldo a favor,
+      // no una deuda más grande, así que se muestra en positivo y en verde.
+      const deudaTexto = sinDeuda ? "Sin deuda" : "Debes";
+      const deudaMonto = fmtCOP(Math.abs(c.deuda));
+      const favor = sinDeuda && c.deuda < 0
+        ? `<p class="tc-favor">Tienes ${fmtCOP(Math.abs(c.deuda))} a favor.</p>`
+        : "";
+
       return `
       <div class="card">
         <div class="card-head">
           <h2>${esc(c.cuenta.name)}</h2>
           <button class="btn btn-ghost btn-mini" data-action="pago-open" data-id="${c.cuenta.id}" type="button">Registrar pago</button>
         </div>
-        <div class="tc-deuda">${fmtCOP(c.deuda)}</div>
-        <div class="tc-sub">de ${fmtCOP(c.cupo)} de cupo · ${Math.round(util)}% usado</div>
+        <div class="tc-label">${deudaTexto}</div>
+        <div class="tc-deuda${sinDeuda ? " ok-text" : ""}">${sinDeuda ? fmtCOP(0) : deudaMonto}</div>
+        <div class="tc-sub">de ${fmtCOP(c.cupo)} de cupo · ${Math.round(ancho)}% usado</div>
         <div class="bar tc-bar">
           <div class="bar-fill ${clase}" style="width:${ancho}%"></div>
           <div class="tc-marca"></div>
         </div>
+        ${favor}
         ${alerta}
         ${fechas ? `<p class="tc-fechas">${fechas}</p>` : ""}
       </div>`;
@@ -338,7 +350,7 @@ function abrirPagoTC(id) {
   if (!cuenta) return;
   abrirModal(`
     <h2>Registrar pago · ${esc(cuenta.name)}</h2>
-    <p class="hint">El pago abona a la deuda de la tarjeta. <b>No cuenta como gasto</b> del mes: el gasto ya se registró cuando consumiste.</p>
+    <p class="hint">Usa esto <b>solo</b> cuando abones/pagues el extracto de la tarjeta: resta de la deuda. <b>No es para registrar compras</b> — eso ya se registró como gasto cuando consumiste. Si aquí registras una compra por error, la deuda mostrada quedará mal.</p>
     <form id="form-pago" data-id="${cuenta.id}">
       <label class="field"><span class="field-label">Monto (COP)</span>
         <input id="pago-monto" inputmode="numeric" placeholder="180.000" required></label>
