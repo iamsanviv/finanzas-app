@@ -296,6 +296,9 @@ function tarjetasTC() {
   return state.cards
     .map((c) => {
       const sinDeuda = c.deuda <= 0;
+      // Hay cuentas de crédito sin cupo definido (un fiado, una cuenta de
+      // barrio). Ahí no hay % de uso que mostrar: solo cuánto debes.
+      const conCupo = c.cupo > 0;
       const util = c.utilizacion;
       const ancho = Math.max(0, Math.min(util, 100)); // barra clamp 0–100
       // Verde ≤30 (zona sana Datacrédito) · dorado ≤70 · rojo >70
@@ -303,7 +306,7 @@ function tarjetasTC() {
       if (!sinDeuda && util > 70) clase = "fill-bad";
       else if (!sinDeuda && util > 30) clase = "fill-gold";
 
-      const alerta = !sinDeuda && util > 30
+      const alerta = conCupo && !sinDeuda && util > 30
         ? `<p class="tc-alerta">⚠ Uso sobre 30%: puede afectar tu Datacrédito.</p>`
         : "";
 
@@ -331,11 +334,12 @@ function tarjetasTC() {
         </div>
         <div class="tc-label">${deudaTexto}</div>
         <div class="tc-deuda${sinDeuda ? " ok-text" : ""}">${sinDeuda ? fmtCOP(0) : deudaMonto}</div>
+        ${conCupo ? `
         <div class="tc-sub">de ${fmtCOP(c.cupo)} de cupo · ${Math.round(ancho)}% usado</div>
         <div class="bar tc-bar">
           <div class="bar-fill ${clase}" style="width:${ancho}%"></div>
           <div class="tc-marca"></div>
-        </div>
+        </div>` : `<div class="tc-sub">Cuenta por pagar · sin cupo definido</div>`}
         ${favor}
         ${alerta}
         ${fechas ? `<p class="tc-fechas">${fechas}</p>` : ""}
