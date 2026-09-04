@@ -57,7 +57,45 @@ export async function cargarDatosIniciales() {
 
 // ---------- datos del mes visible (state.period) ----------
 export async function cargarMes() {
-  await Promise.all([cargarTransacciones(), cargarPlan(), cargarTarjetas()]);
+  await Promise.all([cargarTransacciones(), cargarPlan(), cargarTarjetas(), cargarSaldos()]);
+}
+
+// ---------- saldos de las cuentas líquidas ----------
+// El saldo NO se calcula desde todo el historial: ese historial está
+// incompleto (faltan traslados entre cuentas y saldos de arranque), y
+// sumarlo entero da negativos imposibles. En vez de eso cada cuenta
+// tiene un saldo declarado a una fecha de corte, y encima se le suman
+// solo los movimientos POSTERIORES a esa fecha:
+//   saldo = current_balance + Σ ingresos − Σ gastos   (date > balance_date)
+// El corte es "al cierre" del día declarado, no al inicio: el usuario
+// escribe lo que ve hoy en su banco, que ya incluye los gastos de hoy.
+// Con date >= se los volveríamos a restar.
+async function cargarSaldos() {
+  const liquidas = state.accounts.filter((a) => a.is_active && a.type !== "credito");
+  const conCorte = liquidas.filter((a) => a.balance_date);
+  if (conCorte.length === 0) {
+    state.balances = {};
+    return;
+  }
+
+  // Una sola consulta desde el corte más antiguo; luego se filtra por cuenta.
+  const desde = conCorte.reduce((min, a) => (a.balance_date < min ? a.balance_date : min), conCorte[0].balance_date);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount,kind,account_id,date")
+    .in("account_id", conCorte.map((a) => a.id))
+    .gte("date", desde);
+  if (error) throw new Error(`Cargando saldos: ${error.message}`);
+
+  state.balances = Object.fromEntries(conCorte.map((cuenta) => {
+    const movs = data.filter((t) => t.account_id === cuenta.id && t.date > cuenta.balance_date);
+    const delta = movs.reduce((acc, t) => {
+      if (t.kind === "ingreso") return acc + Number(t.amount);
+      if (t.kind === "gasto") return acc - Number(t.amount);
+      return acc; // pago_tc se registra contra la tarjeta, no contra esta cuenta
+    }, 0);
+    return [cuenta.id, Number(cuenta.current_balance ?? 0) + delta];
+  }));
 }
 
 // ---------- tarjetas de crédito (deuda HISTÓRICA, no solo el mes) ----------
@@ -219,15 +257,20 @@ async function insertar(tabla, filas) {
   if (error) throw new Error(`Sembrando ${tabla}: ${error.message}`);
 }
 
-// Guarda el saldo real que el usuario cuenta en una cuenta líquida.
-// Es un dato declarado, no calculado: la fuente de verdad es su banco.
-export async function actualizarSaldoCuenta(id, saldo) {
+// Guarda el saldo real que el usuario cuenta en una cuenta líquida, con
+// la fecha a la que corresponde. Desde esa fecha la app lo mueve sola.
+export async function actualizarSaldoCuenta(id, saldo, fecha) {
   const { error } = await supabase
     .from("accounts")
-    .update({ current_balance: saldo, balance_updated_at: new Date().toISOString() })
+    .update({
+      current_balance: saldo,
+      balance_date: fecha,
+      balance_updated_at: new Date().toISOString(),
+    })
     .eq("id", id);
   if (error) throw new Error(`Guardando saldo: ${error.message}`);
   await cargarCuentas();
+  await cargarSaldos();
 }
 
 async function cargarCuentas() {

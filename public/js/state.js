@@ -13,6 +13,7 @@ export const state = {
   transactions: [],        // solo las del period visible
   plan: null,              // monthly_plan del period visible
   cards: [],               // tarjetas de crédito con su deuda calculada (histórica)
+  balances: {},            // saldo actual por cuenta líquida: { [account_id]: saldo }
   budgets: [],
   loans: [],
   goals: [],
@@ -146,7 +147,12 @@ export function resumenMes() {
 // periodo visible, no saldo. Por eso no se mezclan.
 export function resumenPatrimonio() {
   const liquidas = state.accounts.filter((a) => a.is_active && a.type !== "credito");
-  const disponible = liquidas.reduce((acc, a) => acc + Number(a.current_balance ?? 0), 0);
+
+  // Solo cuentan las cuentas con fecha de corte: sin ella no hay forma
+  // de saber su saldo, y meterlas como 0 mentiría sobre el total.
+  const conSaldo = liquidas.filter((a) => a.balance_date);
+  const sinSaldo = liquidas.filter((a) => !a.balance_date);
+  const disponible = conSaldo.reduce((acc, a) => acc + saldoCuenta(a.id), 0);
 
   // Una deuda negativa es saldo a favor: no la contamos como deuda.
   const deudas = state.cards.reduce((acc, c) => acc + Math.max(0, c.deuda), 0);
@@ -156,10 +162,15 @@ export function resumenPatrimonio() {
     deudas,
     neto: disponible - deudas,
     liquidas,
-    // Si nunca ha declarado un saldo, el "disponible" es 0 y mostrarlo
-    // como dato duro engañaría. La UI lo usa para pedirle que lo llene.
-    sinDeclarar: liquidas.every((a) => !a.balance_updated_at),
+    conSaldo,
+    sinSaldo,
+    sinDeclarar: conSaldo.length === 0,
   };
+}
+
+// Saldo actual de una cuenta líquida, ya calculado en data.js.
+export function saldoCuenta(id) {
+  return Number(state.balances?.[id] ?? 0);
 }
 
 // ---------- atajos de DOM ----------

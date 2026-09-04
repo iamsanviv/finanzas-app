@@ -7,7 +7,7 @@
 // ============================================================
 import {
   state, $, $$, fmtCOP, esc, parseMonto, todayISO, fmtFecha, diasHastaDia,
-  periodoBonito, moverPeriodo, resumenMes, resumenPatrimonio,
+  periodoBonito, moverPeriodo, resumenMes, resumenPatrimonio, saldoCuenta,
   nombreCategoria, nombreCuenta,
 } from "./state.js";
 import {
@@ -85,6 +85,17 @@ function tarjetaPatrimonio() {
 
   const aviso = p.sinDeclarar
     ? `<p class="hint">Todavía no has dicho cuánta plata tienes. Toca "Actualizar saldos" y escribe lo que cuentas hoy en cada cuenta.</p>`
+    : p.sinSaldo.length > 0
+      ? `<p class="hint">No están contadas: ${p.sinSaldo.map((a) => esc(a.name)).join(", ")}. Ponles saldo para que entren al total.</p>`
+      : "";
+
+  // Desglose por cuenta: el total no debe ser un número que salga de la nada.
+  const detalle = p.conSaldo.length > 0
+    ? `<div class="pat-detalle">${p.conSaldo.map((a) => `
+        <div class="pat-fila">
+          <span>${esc(a.name)}</span>
+          <span class="pat-fila-monto">${fmtCOP(saldoCuenta(a.id))}</span>
+        </div>`).join("")}</div>`
     : "";
 
   return `
@@ -98,6 +109,7 @@ function tarjetaPatrimonio() {
         <div class="pat-label">Balance real</div>
         <div class="pat-value">${fmtCOP(p.disponible)}</div>
         <div class="pat-nota">lo que tienes en tus cuentas</div>
+        ${detalle}
       </div>
       <div class="pat-item">
         <div class="pat-label">Deudas</div>
@@ -118,19 +130,28 @@ function tarjetaPatrimonio() {
 function abrirSaldos() {
   const p = resumenPatrimonio();
   const filas = p.liquidas
-    .map((a) => `
-      <label class="field saldo-fila">
-        <span class="field-label">${esc(a.name)}</span>
+    .map((a) => {
+      const actual = a.balance_date
+        ? `<span class="saldo-actual">hoy: ${fmtCOP(saldoCuenta(a.id))}</span>`
+        : `<span class="saldo-actual saldo-pend">sin saldo</span>`;
+      return `
+      <div class="saldo-fila">
+        <div class="saldo-head"><b>${esc(a.name)}</b>${actual}</div>
         <input class="saldo-input" data-id="${a.id}" inputmode="numeric"
-               value="${a.current_balance ? fmtCOP(a.current_balance) : ""}" placeholder="0">
-      </label>`)
+               value="" placeholder="lo que tienes hoy">
+      </div>`;
+    })
     .join("");
 
   abrirModal(`
     <h2>Actualizar saldos</h2>
-    <p class="hint">Escribe lo que <b>cuentas hoy</b> en cada cuenta, tal como lo ves en tu banco. Esto no es un movimiento: es la foto de tu plata en este momento.</p>
+    <p class="hint">Escribe lo que <b>cuentas hoy</b> en cada cuenta, tal como lo ves en tu banco. Desde hoy la app lo va moviendo sola con cada gasto e ingreso que registres. Deja en blanco las que no quieras tocar.</p>
     <form id="form-saldos">
       ${filas}
+      <label class="field">
+        <span class="field-label">Fecha de estos saldos</span>
+        <input id="saldo-fecha" type="date" value="${todayISO()}">
+      </label>
       <button class="btn btn-primary" type="submit">Guardar saldos</button>
     </form>`);
 }
@@ -521,15 +542,14 @@ document.addEventListener("submit", async (e) => {
       cerrarModal();
       renderDashboard();
     } else if (e.target.id === "form-saldos") {
-      // Solo se guardan las cuentas cuyo saldo cambió: así un campo que
-      // el usuario ni tocó no queda con fecha de actualización falsa.
+      // Solo se guardan las cuentas que el usuario efectivamente escribió:
+      // un campo en blanco significa "no me lo preguntes", no "tengo $0".
+      const fecha = $("#saldo-fecha").value || todayISO();
       const cambios = $$(".saldo-input", e.target)
-        .map((input) => ({ id: input.dataset.id, saldo: parseMonto(input.value) }))
-        .filter(({ id, saldo }) => {
-          const cuenta = state.accounts.find((a) => a.id === id);
-          return cuenta && saldo !== Number(cuenta.current_balance ?? 0);
-        });
-      for (const { id, saldo } of cambios) await actualizarSaldoCuenta(id, saldo);
+        .filter((input) => input.value.trim() !== "")
+        .map((input) => ({ id: input.dataset.id, saldo: parseMonto(input.value) }));
+      if (cambios.length === 0) { cerrarModal(); return; }
+      for (const { id, saldo } of cambios) await actualizarSaldoCuenta(id, saldo, fecha);
       cerrarModal();
       renderDashboard();
     } else if (e.target.id === "form-plan") {
