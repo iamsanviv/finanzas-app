@@ -219,6 +219,17 @@ async function insertar(tabla, filas) {
   if (error) throw new Error(`Sembrando ${tabla}: ${error.message}`);
 }
 
+// Guarda el saldo real que el usuario cuenta en una cuenta líquida.
+// Es un dato declarado, no calculado: la fuente de verdad es su banco.
+export async function actualizarSaldoCuenta(id, saldo) {
+  const { error } = await supabase
+    .from("accounts")
+    .update({ current_balance: saldo, balance_updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`Guardando saldo: ${error.message}`);
+  await cargarCuentas();
+}
+
 async function cargarCuentas() {
   const { data, error } = await supabase
     .from("accounts")

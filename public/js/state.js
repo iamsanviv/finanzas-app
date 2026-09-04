@@ -137,6 +137,31 @@ export function resumenMes() {
   };
 }
 
+// ---------- patrimonio: lo que tengo vs. lo que debo ----------
+// Son dos preguntas distintas y la app las separa a propósito:
+//   · disponible → plata que puedo contar HOY en mis cuentas.
+//   · deudas     → lo que debo en tarjetas y cuentas por pagar.
+//   · neto       → lo que de verdad me queda si pagara todo ahora.
+// El "balance del mes" (ingresos − gastos) es otra cosa: es flujo del
+// periodo visible, no saldo. Por eso no se mezclan.
+export function resumenPatrimonio() {
+  const liquidas = state.accounts.filter((a) => a.is_active && a.type !== "credito");
+  const disponible = liquidas.reduce((acc, a) => acc + Number(a.current_balance ?? 0), 0);
+
+  // Una deuda negativa es saldo a favor: no la contamos como deuda.
+  const deudas = state.cards.reduce((acc, c) => acc + Math.max(0, c.deuda), 0);
+
+  return {
+    disponible,
+    deudas,
+    neto: disponible - deudas,
+    liquidas,
+    // Si nunca ha declarado un saldo, el "disponible" es 0 y mostrarlo
+    // como dato duro engañaría. La UI lo usa para pedirle que lo llene.
+    sinDeclarar: liquidas.every((a) => !a.balance_updated_at),
+  };
+}
+
 // ---------- atajos de DOM ----------
 export function $(sel, root = document) {
   return root.querySelector(sel);

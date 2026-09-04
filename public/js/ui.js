@@ -6,12 +6,14 @@
 // que un re-render del dashboard no los borre.
 // ============================================================
 import {
-  state, $, fmtCOP, esc, parseMonto, todayISO, fmtFecha, diasHastaDia,
-  periodoBonito, moverPeriodo, resumenMes, nombreCategoria, nombreCuenta,
+  state, $, $$, fmtCOP, esc, parseMonto, todayISO, fmtFecha, diasHastaDia,
+  periodoBonito, moverPeriodo, resumenMes, resumenPatrimonio,
+  nombreCategoria, nombreCuenta,
 } from "./state.js";
 import {
   cargarMes, crearTransaccion, borrarTransaccion, actualizarTransaccion,
   guardarPlan, crearCategoria, renombrarCategoria, borrarCategoria,
+  actualizarSaldoCuenta,
 } from "./data.js";
 
 // ---------- vistas base ----------
@@ -66,6 +68,7 @@ export function renderDashboard() {
   const r = resumenMes();
   $("#app-main").innerHTML = [
     navMes(),
+    tarjetaPatrimonio(),
     tarjetaPlan(r),
     tarjetaKpis(r),
     tarjetaRegla(r),
@@ -73,6 +76,63 @@ export function renderDashboard() {
     tarjetaNuevoMovimiento(),
     tarjetaMovimientos(),
   ].join("");
+}
+
+// ---------- patrimonio: lo que tengo vs. lo que debo ----------
+function tarjetaPatrimonio() {
+  const p = resumenPatrimonio();
+  const netoClase = p.neto < 0 ? "bad-text" : "ok-text";
+
+  const aviso = p.sinDeclarar
+    ? `<p class="hint">Todavía no has dicho cuánta plata tienes. Toca "Actualizar saldos" y escribe lo que cuentas hoy en cada cuenta.</p>`
+    : "";
+
+  return `
+  <div class="card">
+    <div class="card-head">
+      <h2>Mi dinero</h2>
+      <button class="btn btn-ghost btn-mini" data-action="saldos-open" type="button">Actualizar saldos</button>
+    </div>
+    <div class="pat-grid">
+      <div class="pat-item">
+        <div class="pat-label">Balance real</div>
+        <div class="pat-value">${fmtCOP(p.disponible)}</div>
+        <div class="pat-nota">lo que tienes en tus cuentas</div>
+      </div>
+      <div class="pat-item">
+        <div class="pat-label">Deudas</div>
+        <div class="pat-value${p.deudas > 0 ? " bad-text" : ""}">${fmtCOP(p.deudas)}</div>
+        <div class="pat-nota">tarjetas y cuentas por pagar</div>
+      </div>
+    </div>
+    <div class="pat-neto">
+      <div class="pat-label">Balance con deudas</div>
+      <div class="pat-neto-value ${netoClase}">${fmtCOP(p.neto)}</div>
+      <div class="pat-nota">lo que te queda si pagaras todo hoy</div>
+    </div>
+    ${aviso}
+  </div>`;
+}
+
+// ---------- modal: actualizar saldos de las cuentas ----------
+function abrirSaldos() {
+  const p = resumenPatrimonio();
+  const filas = p.liquidas
+    .map((a) => `
+      <label class="field saldo-fila">
+        <span class="field-label">${esc(a.name)}</span>
+        <input class="saldo-input" data-id="${a.id}" inputmode="numeric"
+               value="${a.current_balance ? fmtCOP(a.current_balance) : ""}" placeholder="0">
+      </label>`)
+    .join("");
+
+  abrirModal(`
+    <h2>Actualizar saldos</h2>
+    <p class="hint">Escribe lo que <b>cuentas hoy</b> en cada cuenta, tal como lo ves en tu banco. Esto no es un movimiento: es la foto de tu plata en este momento.</p>
+    <form id="form-saldos">
+      ${filas}
+      <button class="btn btn-primary" type="submit">Guardar saldos</button>
+    </form>`);
 }
 
 function navMes() {
@@ -108,7 +168,7 @@ function tarjetaKpis(r) {
   <div class="kpis kpis-3">
     <div class="kpi"><div class="kpi-label">Ingresos</div><div class="kpi-value ok-text">${fmtCOP(r.ingresos)}</div></div>
     <div class="kpi"><div class="kpi-label">Gastos</div><div class="kpi-value bad-text">${fmtCOP(r.gastos)}</div></div>
-    <div class="kpi"><div class="kpi-label">Balance</div><div class="kpi-value">${fmtCOP(r.balance)}</div></div>
+    <div class="kpi"><div class="kpi-label">Balance del mes</div><div class="kpi-value">${fmtCOP(r.balance)}</div></div>
   </div>`;
 }
 
@@ -387,6 +447,8 @@ document.addEventListener("click", async (e) => {
       abrirEditarTx(btn.dataset.id);
     } else if (act === "pago-open") {
       abrirPagoTC(btn.dataset.id);
+    } else if (act === "saldos-open") {
+      abrirSaldos();
     } else if (act === "cats-open") {
       abrirCategorias();
     } else if (act === "cat-rename") {
@@ -456,6 +518,18 @@ document.addEventListener("submit", async (e) => {
         account_id: e.target.dataset.id,
         note: $("#pago-nota").value.trim() || null,
       });
+      cerrarModal();
+      renderDashboard();
+    } else if (e.target.id === "form-saldos") {
+      // Solo se guardan las cuentas cuyo saldo cambió: así un campo que
+      // el usuario ni tocó no queda con fecha de actualización falsa.
+      const cambios = $$(".saldo-input", e.target)
+        .map((input) => ({ id: input.dataset.id, saldo: parseMonto(input.value) }))
+        .filter(({ id, saldo }) => {
+          const cuenta = state.accounts.find((a) => a.id === id);
+          return cuenta && saldo !== Number(cuenta.current_balance ?? 0);
+        });
+      for (const { id, saldo } of cambios) await actualizarSaldoCuenta(id, saldo);
       cerrarModal();
       renderDashboard();
     } else if (e.target.id === "form-plan") {
