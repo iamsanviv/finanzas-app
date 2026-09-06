@@ -36,6 +36,10 @@ const CATEGORIAS_BASE = [
   { name: "Otro gasto",          kind: "gasto" },
 ];
 
+// Cuentas con las que arranca un usuario nuevo. Aquí solo van cuentas
+// genéricas: una tarjeta de crédito es de una persona concreta (tiene su
+// cupo y sus fechas de corte), así que no se le siembra a nadie más.
+// Cada quien agrega las suyas.
 const CUENTAS_BASE = [
   { name: "Efectivo",     type: "efectivo" },
   { name: "Bancolombia",  type: "banco" },
@@ -45,7 +49,6 @@ const CUENTAS_BASE = [
   { name: "Rappi",        type: "billetera" },
   { name: "DolarApp",     type: "billetera" },
   { name: "Binance",      type: "billetera" },
-  { name: "TC Rappi",     type: "credito", credit_limit: 1400000, cut_day: 26, due_day: 10 },
 ];
 
 // ---------- carga inicial (se llama tras cada login) ----------
