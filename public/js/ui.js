@@ -13,7 +13,7 @@ import {
 import {
   cargarMes, crearTransaccion, borrarTransaccion, actualizarTransaccion,
   guardarPlan, crearCategoria, renombrarCategoria, borrarCategoria,
-  actualizarSaldoCuenta,
+  actualizarSaldoCuenta, crearCuenta, renombrarCuenta, archivarCuenta, borrarCuenta,
 } from "./data.js";
 
 // ---------- vistas base ----------
@@ -102,7 +102,10 @@ function tarjetaPatrimonio() {
   <div class="card">
     <div class="card-head">
       <h2>Mi dinero</h2>
-      <button class="btn btn-ghost btn-mini" data-action="saldos-open" type="button">Actualizar saldos</button>
+      <div class="card-acciones">
+        <button class="btn btn-ghost btn-mini" data-action="ctas-open" type="button">Cuentas</button>
+        <button class="btn btn-ghost btn-mini" data-action="saldos-open" type="button">Actualizar saldos</button>
+      </div>
     </div>
     <div class="pat-grid">
       <div class="pat-item">
@@ -364,6 +367,82 @@ function abrirCategorias() {
     ${bloque("ingreso", "Ingresos")}`);
 }
 
+// ---------- modal: gestor de cuentas ----------
+const TIPOS_CUENTA = [
+  ["efectivo",  "Efectivo"],
+  ["banco",     "Banco"],
+  ["billetera", "Billetera"],
+  ["credito",   "Crédito (se paga después)"],
+];
+
+function nombreTipo(t) {
+  return TIPOS_CUENTA.find(([v]) => v === t)?.[1] ?? t;
+}
+
+function abrirCuentas() {
+  const fila = (a) => `
+    <div class="cta-row${a.is_active ? "" : " cta-off"}">
+      <div class="cta-main">
+        <input class="cta-name" data-id="${a.id}" value="${esc(a.name)}" maxlength="40">
+        <span class="cta-tipo">${nombreTipo(a.type)}</span>
+      </div>
+      <div class="cta-acciones">
+        <button class="btn btn-ghost btn-mini" data-action="cta-rename" data-id="${a.id}" type="button">Guardar</button>
+        <button class="btn btn-ghost btn-mini" data-action="cta-archivar" data-id="${a.id}" data-activa="${a.is_active}" type="button">${a.is_active ? "Archivar" : "Reactivar"}</button>
+        <button class="icon-btn" data-action="cta-del" data-id="${a.id}" data-name="${esc(a.name)}" type="button" aria-label="Borrar">✕</button>
+      </div>
+    </div>`;
+
+  const activas = state.accounts.filter((a) => a.is_active).map(fila).join("");
+  const archivadas = state.accounts.filter((a) => !a.is_active).map(fila).join("");
+
+  abrirModal(`
+    <h2>Cuentas</h2>
+    <p class="hint">Archivar saca la cuenta de los selectores pero conserva su historial. Borrar solo se puede si no tiene ni un movimiento.</p>
+    ${activas}
+    ${archivadas ? `<h3 class="cat-sub">Archivadas</h3>${archivadas}` : ""}
+
+    <h3 class="cat-sub">Nueva cuenta</h3>
+    <form id="form-cuenta">
+      <div class="grid2">
+        <label class="field"><span class="field-label">Nombre</span>
+          <input id="cta-new-name" placeholder="Ej: Cafetería Ana" maxlength="40" required></label>
+        <label class="field"><span class="field-label">Tipo</span>
+          <select id="cta-new-tipo">
+            ${TIPOS_CUENTA.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}
+          </select></label>
+      </div>
+      <div id="cta-credito-campos" hidden>
+        <p class="hint">Opcional. Déjalos vacíos si es una cuenta que solo se acumula y se paga después, sin cupo ni fechas fijas.</p>
+        <div class="grid2">
+          <label class="field"><span class="field-label">Cupo (COP)</span>
+            <input id="cta-new-cupo" inputmode="numeric" placeholder="1.400.000"></label>
+          <label class="field"><span class="field-label">Día de corte</span>
+            <input id="cta-new-corte" inputmode="numeric" placeholder="26"></label>
+        </div>
+        <label class="field"><span class="field-label">Día límite de pago</span>
+          <input id="cta-new-pago" inputmode="numeric" placeholder="10"></label>
+      </div>
+      <button class="btn btn-primary" type="submit">Crear cuenta</button>
+    </form>`);
+}
+
+// Los campos de cupo y fechas solo tienen sentido en una cuenta de crédito.
+function alternarCamposCredito() {
+  const tipo = $("#cta-new-tipo");
+  const campos = $("#cta-credito-campos");
+  if (tipo && campos) campos.hidden = tipo.value !== "credito";
+}
+
+// Un día de mes válido, o null si el campo va vacío. Devuelve undefined
+// si escribieron algo que no sirve, para poder avisar en vez de guardar mal.
+function diaDelMes(valor) {
+  const s = String(valor ?? "").trim();
+  if (s === "") return null;
+  const n = Number(s.replace(/[^\d]/g, ""));
+  return n >= 1 && n <= 31 ? n : undefined;
+}
+
 // ---------- tarjetas de crédito ----------
 // Frase amable para los días que faltan hasta el corte/pago.
 function textoDias(n) {
@@ -470,6 +549,25 @@ document.addEventListener("click", async (e) => {
       abrirPagoTC(btn.dataset.id);
     } else if (act === "saldos-open") {
       abrirSaldos();
+    } else if (act === "ctas-open") {
+      abrirCuentas();
+    } else if (act === "cta-rename") {
+      const input = document.querySelector(`.cta-name[data-id="${btn.dataset.id}"]`);
+      const nombre = input.value.trim();
+      if (!nombre) { alert("El nombre no puede quedar vacío."); return; }
+      await renombrarCuenta(btn.dataset.id, nombre);
+      abrirCuentas();
+      renderDashboard();
+    } else if (act === "cta-archivar") {
+      const activa = btn.dataset.activa === "true";
+      await archivarCuenta(btn.dataset.id, !activa);
+      abrirCuentas();
+      renderDashboard();
+    } else if (act === "cta-del") {
+      if (!confirm(`¿Borrar la cuenta "${btn.dataset.name}"?`)) return;
+      await borrarCuenta(btn.dataset.id);
+      abrirCuentas();
+      renderDashboard();
     } else if (act === "cats-open") {
       abrirCategorias();
     } else if (act === "cat-rename") {
@@ -541,6 +639,27 @@ document.addEventListener("submit", async (e) => {
       });
       cerrarModal();
       renderDashboard();
+    } else if (e.target.id === "form-cuenta") {
+      const name = $("#cta-new-name").value.trim();
+      if (!name) { alert("Escribe un nombre."); return; }
+      const type = $("#cta-new-tipo").value;
+
+      const datos = { name, type };
+      if (type === "credito") {
+        const cupo = parseMonto($("#cta-new-cupo").value);
+        const corte = diaDelMes($("#cta-new-corte").value);
+        const pago = diaDelMes($("#cta-new-pago").value);
+        if (corte === undefined || pago === undefined) {
+          alert("El día de corte y el de pago deben estar entre 1 y 31.");
+          return;
+        }
+        datos.credit_limit = cupo > 0 ? cupo : null;
+        datos.cut_day = corte;
+        datos.due_day = pago;
+      }
+      await crearCuenta(datos);
+      abrirCuentas();
+      renderDashboard();
     } else if (e.target.id === "form-saldos") {
       // Solo se guardan las cuentas que el usuario efectivamente escribió:
       // un campo en blanco significa "no me lo preguntes", no "tengo $0".
@@ -579,5 +698,8 @@ document.addEventListener("change", (e) => {
   }
   if (e.target.name === "etx-tipo") {
     $("#etx-cat").innerHTML = opcionesCategorias(e.target.value);
+  }
+  if (e.target.id === "cta-new-tipo") {
+    alternarCamposCredito();
   }
 });

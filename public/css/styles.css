@@ -228,6 +228,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold)}
 .saldo-actual{color:var(--muted);font-size:.74rem;white-space:nowrap}
 .saldo-pend{color:var(--gold)}
 
+/* ---------- gestor de cuentas ---------- */
+.card-acciones{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.cta-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border)}
+.cta-off{opacity:.5}
+.cta-main{flex:1 1 160px;min-width:0}
+.cta-name{width:100%}
+.cta-tipo{display:block;color:var(--muted);font-size:.72rem;margin-top:2px}
+.cta-acciones{display:flex;align-items:center;gap:4px}
+
 /* ---------- tarjeta de crédito ---------- */
 .tc-label{color:var(--muted);font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 .tc-deuda{font-family:var(--font-display);font-weight:700;font-size:1.9rem;letter-spacing:-.02em;line-height:1.1}

@@ -276,6 +276,58 @@ export async function actualizarSaldoCuenta(id, saldo, fecha) {
   await cargarSaldos();
 }
 
+// ---------- gestor de cuentas ----------
+export async function crearCuenta(datos) {
+  const fila = { user_id: state.user.id, ...datos };
+  const { error } = await supabase.from("accounts").insert(fila);
+  if (error) {
+    if (/duplicate key/i.test(error.message))
+      throw new Error(`Ya tienes una cuenta llamada "${datos.name}".`);
+    throw new Error(`Creando cuenta: ${error.message}`);
+  }
+  await cargarCuentas();
+  await cargarMes();
+}
+
+export async function renombrarCuenta(id, name) {
+  const { error } = await supabase.from("accounts").update({ name }).eq("id", id);
+  if (error) {
+    if (/duplicate key/i.test(error.message))
+      throw new Error(`Ya existe otra cuenta con ese nombre.`);
+    throw new Error(`Renombrando cuenta: ${error.message}`);
+  }
+  await cargarCuentas();
+  await cargarMes();
+}
+
+// Archivar en vez de borrar: una cuenta con movimientos es el vínculo de
+// esos movimientos con su origen, y borrarla los dejaría huérfanos
+// (la FK es ON DELETE SET NULL). Archivada desaparece de los selectores
+// pero su historial queda intacto.
+export async function archivarCuenta(id, activa) {
+  const { error } = await supabase.from("accounts").update({ is_active: activa }).eq("id", id);
+  if (error) throw new Error(`Archivando cuenta: ${error.message}`);
+  await cargarCuentas();
+  await cargarMes();
+}
+
+// Solo se permite borrar de verdad una cuenta sin un solo movimiento:
+// ahí no hay historial que romper.
+export async function borrarCuenta(id) {
+  const { count, error: errC } = await supabase
+    .from("transactions")
+    .select("*", { count: "exact", head: true })
+    .eq("account_id", id);
+  if (errC) throw new Error(`Revisando movimientos: ${errC.message}`);
+  if ((count ?? 0) > 0)
+    throw new Error(`Esa cuenta tiene ${count} movimiento(s). Archívala en vez de borrarla.`);
+
+  const { error } = await supabase.from("accounts").delete().eq("id", id);
+  if (error) throw new Error(`Borrando cuenta: ${error.message}`);
+  await cargarCuentas();
+  await cargarMes();
+}
+
 async function cargarCuentas() {
   const { data, error } = await supabase
     .from("accounts")
