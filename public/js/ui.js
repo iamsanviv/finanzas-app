@@ -250,17 +250,22 @@ function tarjetaNuevoMovimiento() {
       <div class="seg">
         <label class="seg-opt"><input type="radio" name="tx-tipo" value="gasto" checked><span>Gasto</span></label>
         <label class="seg-opt"><input type="radio" name="tx-tipo" value="ingreso"><span>Ingreso</span></label>
+        <label class="seg-opt"><input type="radio" name="tx-tipo" value="traslado"><span>Traslado</span></label>
       </div>
       <label class="field">
         <span class="field-label">Monto (COP)</span>
         <input id="tx-monto" inputmode="numeric" placeholder="13.000" required>
       </label>
       <div class="grid2">
-        <label class="field"><span class="field-label">Categoría</span>
+        <label class="field" id="tx-cat-campo"><span class="field-label">Categoría</span>
           <select id="tx-cat">${opcionesCategorias("gasto")}</select></label>
-        <label class="field"><span class="field-label">Cuenta</span>
+        <label class="field"><span class="field-label" id="tx-cta-label">Cuenta</span>
           <select id="tx-cta">${opcionesCuentas()}</select></label>
       </div>
+      <label class="field" id="tx-destino-campo" hidden>
+        <span class="field-label">Hacia</span>
+        <select id="tx-destino">${opcionesCuentas()}</select>
+      </label>
       <div class="grid2">
         <label class="field"><span class="field-label">Fecha</span>
           <input id="tx-fecha" type="date" value="${todayISO()}"></label>
@@ -269,7 +274,8 @@ function tarjetaNuevoMovimiento() {
       </div>
       <button id="tx-guardar" class="btn btn-primary" type="submit">Guardar movimiento</button>
     </form>
-    <p class="hint">¿Compraste con la tarjeta de crédito? Regístralo aquí como <b>Gasto</b> eligiendo la tarjeta como cuenta: eso sí aumenta la deuda. El botón "Registrar pago" de la tarjeta es solo para cuando abonas al extracto.</p>
+    <p class="hint">¿Compraste con la tarjeta de crédito? Regístralo aquí como <b>Gasto</b> eligiendo la tarjeta como cuenta: eso sí aumenta la deuda.</p>
+    <p class="hint"><b>Traslado</b> es plata que cambia de bolsillo sin ser tuya de más ni de menos: de Nequi a Bancolombia, un pago a tu tarjeta desde una cuenta, o plata ajena que te llega y devuelves en efectivo. No cuenta como ingreso ni como gasto.</p>
   </div>`;
 }
 
@@ -289,6 +295,19 @@ function tarjetaMovimientos() {
             ${nota}
           </div>
           <span class="tx-monto">↓${fmtCOP(t.amount)}</span>
+          <button class="icon-btn" data-action="tx-del" data-id="${t.id}" type="button" aria-label="Borrar">✕</button>
+        </div>`;
+      }
+      if (t.kind === "traslado") {
+        const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
+        return `
+        <div class="tx-row">
+          <div class="tx-info">
+            <span class="tx-cat">${esc(nombreCuenta(t.account_id))} → ${esc(nombreCuenta(t.to_account_id))}</span>
+            <span class="tx-meta">${fmtFecha(t.date)} · traslado, no es ingreso ni gasto</span>
+            ${nota}
+          </div>
+          <span class="tx-monto">⇄${fmtCOP(t.amount)}</span>
           <button class="icon-btn" data-action="tx-del" data-id="${t.id}" type="button" aria-label="Borrar">✕</button>
         </div>`;
       }
@@ -601,14 +620,23 @@ document.addEventListener("submit", async (e) => {
     if (e.target.id === "form-tx") {
       const monto = parseMonto($("#tx-monto").value);
       if (monto <= 0) { alert("Escribe un monto válido."); return; }
+      const kind = $('input[name="tx-tipo"]:checked').value;
+      const origen = $("#tx-cta").value;
+      const destino = $("#tx-destino").value;
+      if (kind === "traslado" && origen === destino) {
+        alert("El traslado debe ir de una cuenta a otra distinta.");
+        return;
+      }
       const btn = $("#tx-guardar");
       btn.disabled = true;
       await crearTransaccion({
         date: $("#tx-fecha").value || todayISO(),
-        kind: $('input[name="tx-tipo"]:checked').value,
+        kind,
         amount: monto,
-        category_id: $("#tx-cat").value,
-        account_id: $("#tx-cta").value,
+        // Un traslado no lleva categoría: no es ingreso ni gasto.
+        category_id: kind === "traslado" ? null : $("#tx-cat").value,
+        account_id: origen,
+        to_account_id: kind === "traslado" ? destino : null,
         note: $("#tx-nota").value.trim() || null,
       });
       renderDashboard();
@@ -694,7 +722,13 @@ document.addEventListener("submit", async (e) => {
 
 document.addEventListener("change", (e) => {
   if (e.target.name === "tx-tipo") {
-    $("#tx-cat").innerHTML = opcionesCategorias(e.target.value);
+    const esTraslado = e.target.value === "traslado";
+    // Un traslado no tiene categoría (no es ingreso ni gasto) y sí tiene
+    // dos cuentas: de dónde sale y a dónde llega.
+    $("#tx-cat-campo").hidden = esTraslado;
+    $("#tx-destino-campo").hidden = !esTraslado;
+    $("#tx-cta-label").textContent = esTraslado ? "Desde" : "Cuenta";
+    if (!esTraslado) $("#tx-cat").innerHTML = opcionesCategorias(e.target.value);
   }
   if (e.target.name === "etx-tipo") {
     $("#etx-cat").innerHTML = opcionesCategorias(e.target.value);

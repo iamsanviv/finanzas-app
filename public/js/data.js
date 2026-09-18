@@ -83,19 +83,31 @@ async function cargarSaldos() {
 
   // Una sola consulta desde el corte más antiguo; luego se filtra por cuenta.
   const desde = conCorte.reduce((min, a) => (a.balance_date < min ? a.balance_date : min), conCorte[0].balance_date);
+  const ids = conCorte.map((a) => a.id);
+  // Un traslado toca dos cuentas, y esta cuenta puede ser el destino:
+  // por eso no basta con filtrar por account_id.
   const { data, error } = await supabase
     .from("transactions")
-    .select("amount,kind,account_id,date")
-    .in("account_id", conCorte.map((a) => a.id))
+    .select("amount,kind,account_id,to_account_id,date")
+    .or(`account_id.in.(${ids.join(",")}),to_account_id.in.(${ids.join(",")})`)
     .gte("date", desde);
   if (error) throw new Error(`Cargando saldos: ${error.message}`);
 
   state.balances = Object.fromEntries(conCorte.map((cuenta) => {
-    const movs = data.filter((t) => t.account_id === cuenta.id && t.date > cuenta.balance_date);
+    const movs = data.filter((t) =>
+      (t.account_id === cuenta.id || t.to_account_id === cuenta.id) && t.date > cuenta.balance_date);
     const delta = movs.reduce((acc, t) => {
-      if (t.kind === "ingreso") return acc + Number(t.amount);
-      if (t.kind === "gasto") return acc - Number(t.amount);
-      return acc; // pago_tc se registra contra la tarjeta, no contra esta cuenta
+      if (t.kind === "ingreso" && t.account_id === cuenta.id) return acc + Number(t.amount);
+      if (t.kind === "gasto" && t.account_id === cuenta.id) return acc - Number(t.amount);
+      if (t.kind === "traslado") {
+        // Sale de la cuenta origen y entra a la destino. Si por alguna
+        // razón fueran la misma, los dos términos se anulan solos.
+        let d = 0;
+        if (t.account_id === cuenta.id) d -= Number(t.amount);
+        if (t.to_account_id === cuenta.id) d += Number(t.amount);
+        return acc + d;
+      }
+      return acc; // pago_tc antiguo: se registró contra la tarjeta, sin cuenta origen
     }, 0);
     return [cuenta.id, Number(cuenta.current_balance ?? 0) + delta];
   }));
@@ -104,7 +116,10 @@ async function cargarSaldos() {
 // ---------- tarjetas de crédito (deuda HISTÓRICA, no solo el mes) ----------
 // La deuda de una TC es toda su historia:
 //   deuda = Σ gastos con esa cuenta − Σ pago_tc − Σ ingresos con esa cuenta
-// (un ingreso en la TC = reembolso/cashback → resta deuda).
+//           − Σ traslados HACIA esa cuenta
+// (un ingreso en la TC = reembolso/cashback → resta deuda; un traslado
+// hacia la tarjeta es un pago hecho desde una cuenta concreta, que
+// además descuenta de esa cuenta de origen.)
 async function cargarTarjetas() {
   const tarjetas = state.accounts.filter((a) => a.type === "credito");
   if (tarjetas.length === 0) {
@@ -115,16 +130,20 @@ async function cargarTarjetas() {
   const ids = tarjetas.map((a) => a.id);
   const { data, error } = await supabase
     .from("transactions")
-    .select("amount,kind,account_id")
-    .in("account_id", ids);
+    .select("amount,kind,account_id,to_account_id")
+    .or(`account_id.in.(${ids.join(",")}),to_account_id.in.(${ids.join(",")})`);
   if (error) throw new Error(`Cargando tarjetas: ${error.message}`);
 
   state.cards = tarjetas.map((cuenta) => {
-    const movs = data.filter((t) => t.account_id === cuenta.id);
+    const propios = data.filter((t) => t.account_id === cuenta.id);
     const suma = (kind) =>
-      movs.filter((t) => t.kind === kind).reduce((acc, t) => acc + Number(t.amount), 0);
+      propios.filter((t) => t.kind === kind).reduce((acc, t) => acc + Number(t.amount), 0);
 
-    const deuda = suma("gasto") - suma("pago_tc") - suma("ingreso");
+    const abonos = data
+      .filter((t) => t.kind === "traslado" && t.to_account_id === cuenta.id)
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+
+    const deuda = suma("gasto") - suma("pago_tc") - suma("ingreso") - abonos;
     const cupo = Number(cuenta.credit_limit ?? 0);
     const utilizacion = cupo > 0 ? (deuda / cupo) * 100 : 0;
 
