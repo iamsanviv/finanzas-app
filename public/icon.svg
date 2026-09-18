@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="finanzas·app">
+  <title>finanzas·app</title>
+  <!-- Fondo: el mismo oscuro de la app, con un realce sutil arriba
+       para que el icono no se vea plano sobre fondos claros. -->
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D242E"/>
+      <stop offset="1" stop-color="#0E1116"/>
+    </linearGradient>
+    <linearGradient id="papel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0C75E"/>
+      <stop offset="1" stop-color="#D9A93B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#fondo)"/>
+
+  <!-- El billete. Proporción 380x208 (~1.83:1, la de un billete real),
+       centrado y ocupando el 74% del ancho: a 32px todavía se reconoce. -->
+  <g>
+    <rect x="66" y="152" width="380" height="208" rx="30" fill="url(#papel)"/>
+
+    <!-- Marco interior grabado, como el de un billete. -->
+    <rect x="92" y="178" width="328" height="156" rx="16"
+          fill="none" stroke="#0E1116" stroke-opacity=".22" stroke-width="7"/>
+
+    <!-- Retrato central. -->
+    <circle cx="256" cy="256" r="46" fill="#0E1116" fill-opacity=".8"/>
+    <circle cx="256" cy="256" r="46" fill="none"
+            stroke="#0E1116" stroke-opacity=".28" stroke-width="8"/>
+
+    <!-- Guardas a lado y lado: dan lectura de "billete" sin ruido. -->
+    <g fill="#0E1116" fill-opacity=".22">
+      <rect x="130" y="236" width="62" height="12" rx="6"/>
+      <rect x="130" y="264" width="42" height="12" rx="6"/>
+      <rect x="320" y="236" width="62" height="12" rx="6"/>
+      <rect x="340" y="264" width="42" height="12" rx="6"/>
+    </g>
+  </g>
+</svg>

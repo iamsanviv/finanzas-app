@@ -5,6 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E1116">
   <title>finanzas-app</title>
+
+  <!-- Icono. El SVG lo toman los navegadores modernos; los PNG y el .ico
+       cubren al resto. Safari en iPhone usa apple-touch-icon al "Añadir a
+       pantalla de inicio": tiene que ser PNG, cuadrado y SIN transparencia
+       (iOS rellena de negro el canal alfa y recorta las esquinas él mismo). -->
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- Al abrirla desde la pantalla de inicio se ve sin barra del navegador.
+       Safari sigue leyendo el prefijo apple-; el otro es el estándar. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="finanzas·app">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
