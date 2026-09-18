@@ -275,7 +275,8 @@ function tarjetaNuevoMovimiento() {
       <button id="tx-guardar" class="btn btn-primary" type="submit">Guardar movimiento</button>
     </form>
     <p class="hint">¿Compraste con la tarjeta de crédito? Regístralo aquí como <b>Gasto</b> eligiendo la tarjeta como cuenta: eso sí aumenta la deuda.</p>
-    <p class="hint"><b>Traslado</b> es plata que cambia de bolsillo sin ser tuya de más ni de menos: de Nequi a Bancolombia, un pago a tu tarjeta desde una cuenta, o plata ajena que te llega y devuelves en efectivo. No cuenta como ingreso ni como gasto.</p>
+    <p class="hint"><b>Traslado</b> es plata que cambia de bolsillo sin ser tuya de más ni de menos: de Nequi a Bancolombia, o plata ajena que te llega y devuelves en efectivo. No cuenta como ingreso ni como gasto.</p>
+    <p class="hint">Con la tarjeta funciona en los dos sentidos: <b>hacia</b> la tarjeta es un pago (baja la deuda y sale de tu cuenta); <b>desde</b> la tarjeta es usar el cupo (sube la deuda y la plata entra a la cuenta que elijas), como cuando te dan efectivo para que pases la tarjeta.</p>
   </div>`;
 }
 

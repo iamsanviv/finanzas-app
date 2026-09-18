@@ -115,11 +115,14 @@ async function cargarSaldos() {
 
 // ---------- tarjetas de crédito (deuda HISTÓRICA, no solo el mes) ----------
 // La deuda de una TC es toda su historia:
-//   deuda = Σ gastos con esa cuenta − Σ pago_tc − Σ ingresos con esa cuenta
-//           − Σ traslados HACIA esa cuenta
-// (un ingreso en la TC = reembolso/cashback → resta deuda; un traslado
-// hacia la tarjeta es un pago hecho desde una cuenta concreta, que
-// además descuenta de esa cuenta de origen.)
+//   deuda = Σ gastos + Σ traslados DESDE la tarjeta
+//           − Σ pago_tc − Σ ingresos − Σ traslados HACIA la tarjeta
+// Los traslados son simétricos y ahí está la clave:
+//   · HACIA la tarjeta = le abono plata desde una cuenta → baja la deuda.
+//   · DESDE la tarjeta = uso el cupo para sacar plata (un avance, o
+//     alguien me da efectivo y yo paso la tarjeta) → sube la deuda, y
+//     esa plata entra a la cuenta destino.
+// (un ingreso en la TC = reembolso/cashback → resta deuda.)
 async function cargarTarjetas() {
   const tarjetas = state.accounts.filter((a) => a.type === "credito");
   if (tarjetas.length === 0) {
@@ -143,7 +146,12 @@ async function cargarTarjetas() {
       .filter((t) => t.kind === "traslado" && t.to_account_id === cuenta.id)
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    const deuda = suma("gasto") - suma("pago_tc") - suma("ingreso") - abonos;
+    // Plata sacada contra el cupo: sube la deuda igual que una compra.
+    const avances = data
+      .filter((t) => t.kind === "traslado" && t.account_id === cuenta.id)
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+
+    const deuda = suma("gasto") + avances - suma("pago_tc") - suma("ingreso") - abonos;
     const cupo = Number(cuenta.credit_limit ?? 0);
     const utilizacion = cupo > 0 ? (deuda / cupo) * 100 : 0;
 
