@@ -176,9 +176,26 @@ async function cargarTransacciones() {
     .gte("date", desde)
     .lte("date", hasta)
     .order("date", { ascending: false })
+    // Los días que el usuario reordenó a mano mandan; el resto cae al
+    // final de su día y se ordena por cuándo se registró, como siempre.
+    .order("sort", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Cargando transacciones: ${error.message}`);
   state.transactions = data;
+}
+
+// Fija el orden manual de un día completo. Recibe los ids del día ya en
+// el orden deseado y les asigna 0,1,2... Se numera el día entero (no
+// solo la fila movida) para que no queden huecos ni empates.
+// Van como UPDATE y no como upsert: un upsert con solo {id, sort}
+// intenta primero el INSERT y revienta contra los NOT NULL (user_id,
+// date, kind, amount) antes de llegar al ON CONFLICT.
+export async function reordenarDia(idsEnOrden) {
+  const results = await Promise.all(idsEnOrden.map((id, i) =>
+    supabase.from("transactions").update({ sort: i }).eq("id", id)));
+  const fallo = results.find((r) => r.error);
+  if (fallo) throw new Error(`Guardando el orden: ${fallo.error.message}`);
+  await cargarTransacciones();
 }
 
 async function cargarPlan() {

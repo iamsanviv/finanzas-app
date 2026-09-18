@@ -205,6 +205,29 @@ input:focus,select:focus,textarea:focus{border-color:var(--gold)}
 /* ---------- lista de movimientos ---------- */
 .tx-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .tx-row:last-child{border-bottom:none}
+
+/* Asa para reordenar: tres líneas, apenas visible hasta que se usa.
+   touch-action:none es lo que evita que el dedo haga scroll al arrastrar. */
+.tx-grip{
+  display:flex;flex-direction:column;justify-content:center;gap:3px;
+  width:22px;padding:8px 4px;flex-shrink:0;
+  background:none;border:0;cursor:grab;touch-action:none;
+  opacity:.28;transition:opacity .15s
+}
+.tx-grip span{display:block;height:1.5px;border-radius:1px;background:var(--muted)}
+.tx-grip:hover{opacity:.7}
+.tx-grip:active{cursor:grabbing;opacity:1}
+
+/* Fila levantada mientras se arrastra. */
+.tx-arrastrando{
+  position:relative;z-index:5;cursor:grabbing;
+  background:var(--surface2);border-radius:10px;
+  box-shadow:0 8px 24px rgb(0 0 0 / .45)
+}
+.tx-arrastrando .tx-grip{opacity:1}
+/* Fuera del bloque de su día: ahí no se puede soltar. */
+.tx-bloqueado{box-shadow:0 0 0 1.5px var(--bad), 0 8px 24px rgb(0 0 0 / .45)}
+.tx-bloqueado .tx-grip span{background:var(--bad)}
 .tx-info{flex:1;display:flex;flex-direction:column;min-width:0}
 .tx-cat{font-weight:600;font-size:.9rem}
 .tx-meta{color:var(--muted);font-size:.74rem}

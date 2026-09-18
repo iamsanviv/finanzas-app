@@ -14,6 +14,7 @@ import {
   cargarMes, crearTransaccion, borrarTransaccion, actualizarTransaccion,
   guardarPlan, crearCategoria, renombrarCategoria, borrarCategoria,
   actualizarSaldoCuenta, crearCuenta, renombrarCuenta, archivarCuenta, borrarCuenta,
+  reordenarDia,
 } from "./data.js";
 
 // ---------- vistas base ----------
@@ -289,7 +290,8 @@ function tarjetaMovimientos() {
       if (t.kind === "pago_tc") {
         const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
         return `
-        <div class="tx-row">
+        <div class="tx-row" data-id="${t.id}" data-fecha="${t.date}">
+          <button class="tx-grip" data-accion-grip data-id="${t.id}" type="button" aria-label="Arrastrar para reordenar"><span></span><span></span><span></span></button>
           <div class="tx-info">
             <span class="tx-cat">Pago ${esc(nombreCuenta(t.account_id))} · abono a deuda</span>
             <span class="tx-meta">${fmtFecha(t.date)}</span>
@@ -302,7 +304,8 @@ function tarjetaMovimientos() {
       if (t.kind === "traslado") {
         const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
         return `
-        <div class="tx-row">
+        <div class="tx-row" data-id="${t.id}" data-fecha="${t.date}">
+          <button class="tx-grip" data-accion-grip data-id="${t.id}" type="button" aria-label="Arrastrar para reordenar"><span></span><span></span><span></span></button>
           <div class="tx-info">
             <span class="tx-cat">${esc(nombreCuenta(t.account_id))} → ${esc(nombreCuenta(t.to_account_id))}</span>
             <span class="tx-meta">${fmtFecha(t.date)} · traslado, no es ingreso ni gasto</span>
@@ -316,7 +319,8 @@ function tarjetaMovimientos() {
       const claseMonto = t.kind === "ingreso" ? "ok-text" : "bad-text";
       const nota = t.note ? `<span class="tx-nota">${esc(t.note)}</span>` : "";
       return `
-      <div class="tx-row">
+      <div class="tx-row" data-id="${t.id}" data-fecha="${t.date}">
+        <button class="tx-grip" data-accion-grip data-id="${t.id}" type="button" aria-label="Arrastrar para reordenar"><span></span><span></span><span></span></button>
         <div class="tx-info">
           <span class="tx-cat">${esc(nombreCategoria(t.category_id))}</span>
           <span class="tx-meta">${fmtFecha(t.date)} · ${esc(nombreCuenta(t.account_id))}</span>
@@ -720,6 +724,101 @@ document.addEventListener("submit", async (e) => {
     if (b) b.disabled = false;
   }
 });
+
+// ---------- reordenar movimientos arrastrando ----------
+// Se usan Pointer Events y no el drag-and-drop de HTML5: ese último no
+// funciona con el dedo, y esta app se usa sobre todo desde el teléfono.
+//
+// La regla es que un movimiento solo se mueve DENTRO de su propio día.
+// No hace falta un chequeo aparte para impedirlo: el intercambio solo
+// mira las filas que comparten data-fecha, así que al arrastrar fuera
+// del bloque del día simplemente no hay con quién intercambiar. La fila
+// sigue al dedo, se marca en rojo y al soltar vuelve a su sitio.
+let arrastre = null;
+
+function filasDelDia(cont, fecha) {
+  return [...cont.querySelectorAll(".tx-row")].filter((f) => f.dataset.fecha === fecha);
+}
+
+document.addEventListener("pointerdown", (e) => {
+  const grip = e.target.closest(".tx-grip");
+  if (!grip) return;
+
+  const fila = grip.closest(".tx-row");
+  const cont = fila.parentElement;
+  const fecha = fila.dataset.fecha;
+  // Un movimiento solo en su día: si está solo ese día, no hay nada que hacer.
+  if (filasDelDia(cont, fecha).length < 2) return;
+
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  arrastre = {
+    fila, cont, fecha, grip,
+    pointerId: e.pointerId,
+    y0: e.clientY,
+    ordenInicial: filasDelDia(cont, fecha).map((f) => f.dataset.id),
+  };
+  fila.classList.add("tx-arrastrando");
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!arrastre || e.pointerId !== arrastre.pointerId) return;
+  const { fila, cont, fecha } = arrastre;
+
+  fila.style.transform = `translateY(${e.clientY - arrastre.y0}px)`;
+
+  const hermanas = filasDelDia(cont, fecha).filter((f) => f !== fila);
+  const destino = hermanas.find((f) => {
+    const r = f.getBoundingClientRect();
+    return e.clientY > r.top && e.clientY < r.bottom;
+  });
+
+  // Fuera del bloque de su día no hay destino válido: se avisa en rojo.
+  fila.classList.toggle("tx-bloqueado", !destino && !dentroDelDia(e.clientY, cont, fecha, fila));
+
+  if (!destino) return;
+  const r = destino.getBoundingClientRect();
+  const arriba = e.clientY < r.top + r.height / 2;
+  cont.insertBefore(fila, arriba ? destino : destino.nextSibling);
+  // La fila ya cambió de sitio: se reancla el origen para que no salte.
+  arrastre.y0 = e.clientY;
+  fila.style.transform = "";
+});
+
+// La fila que se está arrastrando se excluye del rango: lleva un
+// translateY pegado al dedo, así que su rect estira el bloque del día
+// hasta donde uno la lleve y nunca se detectaría que salió de él.
+function dentroDelDia(y, cont, fecha, excluir) {
+  const rects = filasDelDia(cont, fecha)
+    .filter((f) => f !== excluir)
+    .map((f) => f.getBoundingClientRect());
+  if (rects.length === 0) return false;
+  return y >= Math.min(...rects.map((r) => r.top))
+      && y <= Math.max(...rects.map((r) => r.bottom));
+}
+
+async function terminarArrastre(e) {
+  if (!arrastre || e.pointerId !== arrastre.pointerId) return;
+  const { fila, cont, fecha, grip, pointerId, ordenInicial } = arrastre;
+  arrastre = null;
+
+  fila.style.transform = "";
+  fila.classList.remove("tx-arrastrando", "tx-bloqueado");
+  try { grip.releasePointerCapture(pointerId); } catch { /* ya liberado */ }
+
+  const orden = filasDelDia(cont, fecha).map((f) => f.dataset.id);
+  if (orden.join() === ordenInicial.join()) return; // no se movió de sitio
+
+  try {
+    await reordenarDia(orden);
+  } catch (err) {
+    alert(err.message);
+  }
+  renderDashboard(); // repinta desde los datos, se haya guardado o no
+}
+
+document.addEventListener("pointerup", terminarArrastre);
+document.addEventListener("pointercancel", terminarArrastre);
 
 document.addEventListener("change", (e) => {
   if (e.target.name === "tx-tipo") {
