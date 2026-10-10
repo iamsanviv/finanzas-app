@@ -514,7 +514,6 @@ function tarjetasTC() {
       <div class="card">
         <div class="card-head">
           <h2>${esc(c.cuenta.name)}</h2>
-          <button class="btn btn-ghost btn-mini" data-action="pago-open" data-id="${c.cuenta.id}" type="button">Registrar pago</button>
         </div>
         <div class="tc-label">${deudaTexto}</div>
         <div class="tc-deuda${sinDeuda ? " ok-text" : ""}">${sinDeuda ? fmtCOP(0) : deudaMonto}</div>
@@ -532,25 +531,11 @@ function tarjetasTC() {
     .join("");
 }
 
-// ---------- modal: registrar pago de TC ----------
-function abrirPagoTC(id) {
-  const cuenta = state.accounts.find((a) => a.id === id);
-  if (!cuenta) return;
-  abrirModal(`
-    <h2>Registrar pago · ${esc(cuenta.name)}</h2>
-    <p class="hint">Usa esto <b>solo</b> cuando abones/pagues el extracto de la tarjeta: resta de la deuda. <b>No es para registrar compras</b> — eso ya se registró como gasto cuando consumiste. Si aquí registras una compra por error, la deuda mostrada quedará mal.</p>
-    <form id="form-pago" data-id="${cuenta.id}">
-      <label class="field"><span class="field-label">Monto (COP)</span>
-        <input id="pago-monto" inputmode="numeric" placeholder="180.000" required></label>
-      <div class="grid2">
-        <label class="field"><span class="field-label">Fecha</span>
-          <input id="pago-fecha" type="date" value="${todayISO()}"></label>
-        <label class="field"><span class="field-label">Nota</span>
-          <input id="pago-nota" placeholder="opcional" maxlength="120"></label>
-      </div>
-      <button class="btn btn-primary" type="submit">Registrar pago</button>
-    </form>`);
-}
+// Un pago de tarjeta se registra como Traslado desde la cuenta de donde
+// sale la plata: así baja la deuda Y descuenta de esa cuenta. El botón
+// "Registrar pago" que había aquí solo hacía lo primero, y dejaba el
+// saldo de la cuenta inflado. Los pago_tc viejos se siguen leyendo y
+// restando de la deuda; lo que ya no existe es la forma de crear nuevos.
 
 // ---------- eventos (delegación única) ----------
 document.addEventListener("click", async (e) => {
@@ -569,8 +554,6 @@ document.addEventListener("click", async (e) => {
       renderDashboard();
     } else if (act === "tx-edit") {
       abrirEditarTx(btn.dataset.id);
-    } else if (act === "pago-open") {
-      abrirPagoTC(btn.dataset.id);
     } else if (act === "saldos-open") {
       abrirSaldos();
     } else if (act === "ctas-open") {
@@ -656,19 +639,6 @@ document.addEventListener("submit", async (e) => {
         category_id: $("#etx-cat").value,
         account_id: $("#etx-cta").value,
         note: $("#etx-nota").value.trim() || null,
-      });
-      cerrarModal();
-      renderDashboard();
-    } else if (e.target.id === "form-pago") {
-      const monto = parseMonto($("#pago-monto").value);
-      if (monto <= 0) { alert("Escribe un monto válido."); return; }
-      await crearTransaccion({
-        date: $("#pago-fecha").value || todayISO(),
-        kind: "pago_tc",
-        amount: monto,
-        category_id: null,
-        account_id: e.target.dataset.id,
-        note: $("#pago-nota").value.trim() || null,
       });
       cerrarModal();
       renderDashboard();
